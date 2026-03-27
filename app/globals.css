@@ -53,5 +53,5 @@ body {
 
 .grid-sheet {
   display: grid;
-  grid-template-columns: 110px repeat(7, minmax(210px, 1fr));
+  grid-template-columns: 120px repeat(7, minmax(160px, 1fr));
 }

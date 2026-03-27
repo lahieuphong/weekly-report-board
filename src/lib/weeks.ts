@@ -1,10 +1,11 @@
-import fs from "node:fs/promises";
-import path from "node:path";
+import fs from "fs/promises";
+import path from "path";
+import type { Dirent } from "fs";
 import matter from "gray-matter";
 
 const CONTENT_DIR = path.join(process.cwd(), "content", "weeks");
 
-const DAY_LABELS = [
+export const DAY_LABELS = [
   "Thứ hai",
   "Thứ ba",
   "Thứ tư",
@@ -38,6 +39,9 @@ export type WeekReport = {
   weekLabel: string;
   startDate: string;
   endDate: string;
+  reportYear: number;
+  reportMonth: number;
+  reportWeekOfMonth: number;
   summaryMarkdown: string;
   resultMarkdown: string;
   blockerMarkdown: string;
@@ -49,12 +53,15 @@ export type WeekReport = {
 };
 
 type Frontmatter = {
-  slug: string;
-  title: string;
-  owner: string;
-  weekLabel: string;
-  startDate: unknown;
-  endDate: unknown;
+  slug?: unknown;
+  title?: unknown;
+  owner?: unknown;
+  weekLabel?: unknown;
+  startDate?: unknown;
+  endDate?: unknown;
+  reportYear?: unknown;
+  reportMonth?: unknown;
+  reportWeekOfMonth?: unknown;
 };
 
 function normalizeDate(value: unknown): string {
@@ -62,7 +69,7 @@ function normalizeDate(value: unknown): string {
     return value.toISOString().slice(0, 10);
   }
 
-  return String(value ?? "");
+  return String(value ?? "").trim();
 }
 
 function toDateValue(value: string): number {
@@ -70,13 +77,92 @@ function toDateValue(value: string): number {
   return Number.isNaN(time) ? 0 : time;
 }
 
-function splitSections(markdown: string) {
+function toPositiveInt(value: unknown): number {
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? Math.floor(num) : 0;
+}
+
+function getWeekOfMonthFromDate(dateString: string): number {
+  const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) {
+    return 0;
+  }
+
+  return Math.ceil(date.getDate() / 7);
+}
+
+function inferSlugFromPath(filePath: string): string {
+  return path.basename(filePath, ".md");
+}
+
+function inferCalendarMeta(params: {
+  filePath: string;
+  slug: string;
+  startDate: string;
+  meta: Frontmatter;
+}): {
+  reportYear: number;
+  reportMonth: number;
+  reportWeekOfMonth: number;
+} {
+  const { filePath, slug, startDate, meta } = params;
+
+  let reportYear = toPositiveInt(meta.reportYear);
+  let reportMonth = toPositiveInt(meta.reportMonth);
+  let reportWeekOfMonth = toPositiveInt(meta.reportWeekOfMonth);
+
+  const slugMatch = slug.match(/^(\d{4})-m(\d{2})-w(\d{2})$/);
+
+  if (slugMatch) {
+    if (!reportYear) reportYear = Number(slugMatch[1]);
+    if (!reportMonth) reportMonth = Number(slugMatch[2]);
+    if (!reportWeekOfMonth) reportWeekOfMonth = Number(slugMatch[3]);
+  }
+
+  const relativePath = path.relative(CONTENT_DIR, filePath);
+  const pathParts = relativePath.split(path.sep);
+
+  if (pathParts.length >= 3) {
+    const yearFromPath = Number(pathParts[0]);
+    const monthFromPath = Number(pathParts[1]);
+
+    if (!reportYear && Number.isFinite(yearFromPath)) {
+      reportYear = yearFromPath;
+    }
+
+    if (!reportMonth && Number.isFinite(monthFromPath)) {
+      reportMonth = monthFromPath;
+    }
+  }
+
+  if ((!reportYear || !reportMonth) && startDate) {
+    const date = new Date(startDate);
+
+    if (!Number.isNaN(date.getTime())) {
+      if (!reportYear) reportYear = date.getFullYear();
+      if (!reportMonth) reportMonth = date.getMonth() + 1;
+    }
+  }
+
+  if (!reportWeekOfMonth && startDate) {
+    reportWeekOfMonth = getWeekOfMonthFromDate(startDate);
+  }
+
+  return {
+    reportYear,
+    reportMonth,
+    reportWeekOfMonth,
+  };
+}
+
+function splitSections(markdown: string): Map<string, string> {
   const lines = markdown.split(/\r?\n/);
   const sections = new Map<string, string>();
   let current = "__root__";
   let buffer: string[] = [];
 
-  const flush = () => {
+  const flush = (): void => {
     sections.set(current, buffer.join("\n").trim());
     buffer = [];
   };
@@ -87,6 +173,7 @@ function splitSections(markdown: string) {
       current = line.replace(/^##\s+/, "").trim();
       continue;
     }
+
     buffer.push(line);
   }
 
@@ -135,15 +222,51 @@ function parseDaySection(label: DayLabel, markdown: string): DaySection {
   };
 }
 
-async function readWeekFile(fileName: string): Promise<WeekReport> {
-  const fullPath = path.join(CONTENT_DIR, fileName);
+async function getMarkdownFiles(dir: string): Promise<string[]> {
+  const entries: Dirent[] = await fs.readdir(dir, { withFileTypes: true });
+
+  const results = await Promise.all(
+    entries.map(async (entry: Dirent): Promise<string[]> => {
+      const fullPath = path.join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        return getMarkdownFiles(fullPath);
+      }
+
+      if (
+        entry.isFile() &&
+        entry.name.endsWith(".md") &&
+        !entry.name.startsWith("_")
+      ) {
+        return [fullPath];
+      }
+
+      return [];
+    })
+  );
+
+  return results.flat();
+}
+
+async function readWeekFile(fullPath: string): Promise<WeekReport> {
   const raw = await fs.readFile(fullPath, "utf-8");
   const { data, content } = matter(raw);
   const meta = data as Frontmatter;
 
   const sections = splitSections(content);
 
-  const days = DAY_LABELS.map((label) =>
+  const slug = String(meta.slug ?? "").trim() || inferSlugFromPath(fullPath);
+  const startDate = normalizeDate(meta.startDate);
+  const endDate = normalizeDate(meta.endDate);
+
+  const { reportYear, reportMonth, reportWeekOfMonth } = inferCalendarMeta({
+    filePath: fullPath,
+    slug,
+    startDate,
+    meta,
+  });
+
+  const days: DaySection[] = DAY_LABELS.map((label) =>
     parseDaySection(label, sections.get(label) ?? "")
   );
 
@@ -154,12 +277,15 @@ async function readWeekFile(fileName: string): Promise<WeekReport> {
     totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100);
 
   return {
-    slug: String(meta.slug ?? ""),
-    title: String(meta.title ?? ""),
-    owner: String(meta.owner ?? ""),
-    weekLabel: String(meta.weekLabel ?? ""),
-    startDate: normalizeDate(meta.startDate),
-    endDate: normalizeDate(meta.endDate),
+    slug,
+    title: String(meta.title ?? "").trim(),
+    owner: String(meta.owner ?? "").trim(),
+    weekLabel: String(meta.weekLabel ?? "").trim(),
+    startDate,
+    endDate,
+    reportYear,
+    reportMonth,
+    reportWeekOfMonth,
     summaryMarkdown: sections.get("Tóm tắt") ?? "",
     resultMarkdown: sections.get("Kết quả") ?? "",
     blockerMarkdown: sections.get("Blocker") ?? "",
@@ -171,11 +297,8 @@ async function readWeekFile(fileName: string): Promise<WeekReport> {
   };
 }
 
-export async function getAllWeeks() {
-  const files = await fs.readdir(CONTENT_DIR);
-  const markdownFiles = files.filter(
-    (file) => file.endsWith(".md") && !file.startsWith("_")
-  );
+export async function getAllWeeks(): Promise<WeekReport[]> {
+  const markdownFiles = await getMarkdownFiles(CONTENT_DIR);
   const reports = await Promise.all(markdownFiles.map(readWeekFile));
 
   return reports.sort(
@@ -183,7 +306,7 @@ export async function getAllWeeks() {
   );
 }
 
-export async function getWeekBySlug(slug: string) {
+export async function getWeekBySlug(slug: string): Promise<WeekReport> {
   const all = await getAllWeeks();
   const found = all.find((item) => item.slug === slug);
 
@@ -194,7 +317,7 @@ export async function getWeekBySlug(slug: string) {
   return found;
 }
 
-export async function getAllWeekSlugs() {
+export async function getAllWeekSlugs(): Promise<string[]> {
   const all = await getAllWeeks();
   return all.map((item) => item.slug);
 }

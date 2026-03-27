@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { ReportSheet } from "@/components/report-sheet";
+import { ChecklistSheet } from "@/components/checklist-sheet";
 import { getWeekBySlug } from "@/lib/weeks";
 
 type Props = {
@@ -8,12 +8,12 @@ type Props = {
   }>;
 };
 
-export default async function WeekReportPage({ params }: Props) {
+export default async function WeekChecklistPage({ params }: Props) {
   const { slug } = await params;
 
   try {
     const week = await getWeekBySlug(slug);
-    return <ReportSheet week={week} />;
+    return <ChecklistSheet week={week} />;
   } catch {
     notFound();
   }
