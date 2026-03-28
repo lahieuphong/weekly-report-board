@@ -1,7 +1,18 @@
 import type { DaySection } from "@/lib/weeks";
+import {
+  SHEET_GRID_TEMPLATE,
+  SHEET_HEADER_BG,
+  SHEET_HEADER_BORDER_COLOR,
+  SHEET_LETTER_BG,
+  SHEET_MIN_WIDTH,
+  SHEET_ROW_HEIGHT,
+  SHEET_TASK_BORDER_COLOR,
+  createHorizontalGridBackground,
+} from "@/lib/sheet-grid";
 
 type Props = {
   days: DaySection[];
+  startDate: string;
 };
 
 const START_MINUTES = 8 * 60;
@@ -38,65 +49,165 @@ const slots = Array.from(
   }
 );
 
-export function ScheduleBoard({ days }: Props) {
+function getColumnLetter(index: number) {
+  return String.fromCharCode(65 + index);
+}
+
+function getDateLabels(startDate: string, totalDays: number) {
+  const base = new Date(startDate);
+
+  if (Number.isNaN(base.getTime())) {
+    return Array.from({ length: totalDays }, () => "");
+  }
+
+  return Array.from({ length: totalDays }, (_, index) => {
+    const date = new Date(base);
+    date.setDate(base.getDate() + index);
+    return `${date.getDate()}/${date.getMonth() + 1}`;
+  });
+}
+
+export function ScheduleBoard({ days, startDate }: Props) {
+  const columnLetters = Array.from(
+    { length: days.length + 1 },
+    (_, index) => getColumnLetter(index)
+  );
+
+  const dateLabels = getDateLabels(startDate, days.length);
+  const bodyGridStyle = createHorizontalGridBackground();
+
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white">
       <div className="overflow-x-auto">
-        <div className="grid-sheet min-w-[1200px]">
-          <div className="border-r border-b border-slate-300 bg-slate-100 px-3 py-3 text-sm font-semibold text-slate-700">
-            Deadline
-          </div>
-
-          {days.map((day) => (
+        <div
+          style={{
+            minWidth: SHEET_MIN_WIDTH,
+            display: "grid",
+            gridTemplateColumns: SHEET_GRID_TEMPLATE,
+          }}
+        >
+          {columnLetters.map((letter, index) => (
             <div
-              key={day.label}
-              className="border-r border-b border-slate-300 bg-slate-100 px-3 py-3 text-center text-sm font-bold text-slate-800"
+              key={`letter-${letter}`}
+              className="px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+              style={{
+                background: SHEET_LETTER_BG,
+                borderBottom: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+                borderRight:
+                  index === columnLetters.length - 1
+                    ? "none"
+                    : `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+              }}
             >
-              {day.label.toUpperCase()}
+              {letter}
             </div>
           ))}
 
           <div
-            className="border-r border-slate-300 bg-slate-50"
+            className="px-3 py-2"
+            style={{
+              background: "#ffffff",
+              borderBottom: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+              borderRight: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+            }}
+          />
+
+          {dateLabels.map((dateLabel, index) => (
+            <div
+              key={`date-${dateLabel}-${index}`}
+              className="px-3 py-2 text-center text-[13px] font-medium text-slate-600"
+              style={{
+                background: "#ffffff",
+                borderBottom: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+                borderRight:
+                  index === dateLabels.length - 1
+                    ? "none"
+                    : `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+              }}
+            >
+              {dateLabel}
+            </div>
+          ))}
+
+          <div
+            className="px-3 py-3 text-left text-[13px] font-semibold text-slate-800"
+            style={{
+              background: SHEET_HEADER_BG,
+              borderBottom: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+              borderRight: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+            }}
+          >
+            Deadline
+          </div>
+
+          {days.map((day, index) => (
+            <div
+              key={`header-${day.label}-${index}`}
+              className="px-3 py-2.5 text-center text-[13px] font-semibold uppercase text-slate-800"
+              style={{
+                background: SHEET_HEADER_BG,
+                borderBottom: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+                borderRight:
+                  index === days.length - 1
+                    ? "none"
+                    : `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+              }}
+            >
+              {day.label}
+            </div>
+          ))}
+
+          <div
+            className="bg-slate-50"
             style={{
               display: "grid",
-              gridTemplateRows: `repeat(${slots.length}, 42px)`,
+              gridTemplateRows: `repeat(${slots.length}, ${SHEET_ROW_HEIGHT}px)`,
+              ...bodyGridStyle,
+              borderRight: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
             }}
           >
             {slots.map((time) => (
               <div
                 key={time}
-                className="border-b border-slate-200 px-2 py-2 text-right text-xs text-slate-500"
+                className="px-2 py-1.5 text-right text-[11px] font-medium text-slate-500"
               >
                 {time}
               </div>
             ))}
           </div>
 
-          {days.map((day) => {
+          {days.map((day, dayIndex) => {
             const timedItems = day.items.filter((item) => item.start && item.end);
-            const looseItems = day.items.filter((item) => !item.start || !item.end);
+            const looseItems = day.items.filter(
+              (item) => !item.start || !item.end
+            );
 
             return (
               <div
-                key={day.label}
-                className="relative border-r border-slate-300 bg-white"
+                key={`${day.label}-${dayIndex}`}
+                className="relative bg-white"
                 style={{
                   display: "grid",
-                  gridTemplateRows: `repeat(${slots.length}, 42px)`,
+                  gridTemplateRows: `repeat(${slots.length}, ${SHEET_ROW_HEIGHT}px)`,
+                  ...bodyGridStyle,
+                  borderRight:
+                    dayIndex === days.length - 1
+                      ? "none"
+                      : `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
                 }}
               >
-                {slots.map((_, index) => (
-                  <div key={index} className="border-b border-slate-200" />
-                ))}
-
                 {timedItems.map((item, index) => (
                   <div
                     key={`${item.title}-${index}`}
-                    className="z-10 m-1 rounded-none border border-slate-400 bg-slate-50 p-2 text-xs shadow-none"
-                    style={{ gridRow: getGridRow(item.start, item.end) ?? undefined }}
+                    className="z-10 m-0.5 overflow-hidden border bg-slate-50/95 px-2 py-1 text-[12px] text-slate-800"
+                    style={{
+                      gridRow: getGridRow(item.start, item.end) ?? undefined,
+                      borderColor: SHEET_TASK_BORDER_COLOR,
+                    }}
                   >
-                    <div className="font-medium text-slate-900">{item.title}</div>
+                    <div className="whitespace-pre-wrap font-medium leading-4">
+                      {item.title}
+                    </div>
                     <div className="mt-1 text-[11px] text-slate-500">
                       {item.start} - {item.end}
                     </div>
@@ -105,17 +216,24 @@ export function ScheduleBoard({ days }: Props) {
 
                 {looseItems.length > 0 ? (
                   <div
-                    className="z-10 m-1 rounded-none border border-dashed border-slate-400 bg-slate-50 p-2 text-xs"
-                    style={{ gridRow: `${slots.length - 2} / ${slots.length + 1}` }}
+                    className="z-10 m-0.5 border border-dashed bg-slate-50/95 px-2 py-2 text-[12px] text-slate-700"
+                    style={{
+                      gridRow: `${slots.length - 2} / ${slots.length + 1}`,
+                      borderColor: SHEET_TASK_BORDER_COLOR,
+                    }}
                   >
-                    <div className="mb-2 font-semibold text-slate-700">
+                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                       Không cố định giờ
                     </div>
-                    <div className="space-y-1">
+
+                    <div className="space-y-1.5">
                       {looseItems.map((item, index) => (
                         <div
                           key={`${item.title}-loose-${index}`}
-                          className="border border-slate-200 bg-white p-2"
+                          className="border bg-white px-2 py-1.5 text-[12px] text-slate-800"
+                          style={{
+                            borderColor: SHEET_TASK_BORDER_COLOR,
+                          }}
                         >
                           {item.title}
                         </div>

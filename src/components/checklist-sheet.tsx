@@ -1,5 +1,7 @@
 import type { WeekReport } from "@/lib/weeks";
 import { ChecklistTable } from "@/components/checklist-table";
+import { WeekFeedbackSolution } from "@/components/week-feedback-solution";
+import { WeekSheetHeader } from "@/components/week-sheet-header";
 
 type Props = {
   week: WeekReport;
@@ -7,15 +9,18 @@ type Props = {
 
 export function ChecklistSheet({ week }: Props) {
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900">Checklist tổng hợp</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Danh sách task của {week.title}
-        </p>
-      </div>
+    <div className="space-y-6">
+      <WeekSheetHeader week={week} />
 
-      <ChecklistTable items={week.checklist} />
+      <ChecklistTable
+        items={week.checklist}
+        ownerShortName={week.ownerShortName}
+      />
+
+      <WeekFeedbackSolution
+        feedbackMarkdown={week.resultMarkdown}
+        solutionMarkdown={week.blockerMarkdown}
+      />
     </div>
   );
 }

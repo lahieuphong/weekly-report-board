@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { WeekHeader } from "@/components/week-header";
 import { WeekTabs } from "@/components/week-tabs";
+import { WeekTopbar } from "@/components/week-topbar";
 import { getAllWeekSlugs, getWeekBySlug } from "@/lib/weeks";
 
 type Props = {
@@ -27,27 +26,21 @@ export default async function WeekLayout({ children, params }: Props) {
   }
 
   return (
-    <main className="container-page pb-24">
-      <div className="mb-6">
-        <Link
-          href="/"
-          className="text-sm font-medium text-emerald-700 hover:underline"
-        >
-          ← Quay về danh sách tuần
-        </Link>
-      </div>
+    <>
+      <WeekTopbar week={week} />
 
-      <WeekHeader week={week} />
-
-      <div className="mt-6">
-        <div className="surface overflow-hidden">
-          <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-            <WeekTabs slug={week.slug} />
-          </div>
-
-          <div className="p-4 md:p-6">{children}</div>
+      <main className="container-page pb-44 pt-6 md:pb-48">
+        <div className="mb-6 md:mb-8">
+          <div className="surface overflow-hidden p-4 md:p-6">{children}</div>
         </div>
-      </div>
-    </main>
+      </main>
+
+      <WeekTabs
+        slug={week.slug}
+        reportWeekOfMonth={week.reportWeekOfMonth}
+        reportMonth={week.reportMonth}
+        reportYear={week.reportYear}
+      />
+    </>
   );
 }
