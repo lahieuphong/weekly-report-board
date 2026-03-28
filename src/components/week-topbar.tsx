@@ -1,10 +1,12 @@
-import Image from "next/image";
 import Link from "next/link";
 import type { WeekReport } from "@/lib/weeks";
 
 type Props = {
   week: WeekReport;
 };
+
+const BASE_PATH =
+  process.env.NODE_ENV === "production" ? "/weekly-report-board" : "";
 
 function AppIcon() {
   return (
@@ -136,13 +138,12 @@ export function WeekTopbar({ week }: Props) {
           </button>
 
           <div className="overflow-hidden rounded-full ring-2 ring-white shadow-sm">
-            <Image
-              src="/avatar/lahieuphong.png"
+            <img
+              src={`${BASE_PATH}/avatar/lahieuphong.png`}
               alt={week.owner}
               width={40}
               height={40}
               className="h-10 w-10 object-cover"
-              priority
             />
           </div>
         </div>

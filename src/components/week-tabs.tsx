@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
@@ -11,6 +10,9 @@ type Props = {
   reportMonth: number;
   reportYear: number;
 };
+
+const BASE_PATH =
+  process.env.NODE_ENV === "production" ? "/weekly-report-board" : "";
 
 function padMonth(value: number) {
   return String(value).padStart(2, "0");
@@ -56,13 +58,13 @@ export function WeekTabs({
               >
                 <span className="whitespace-nowrap">{tab.label}</span>
 
-                <Image
-                  src="/icon/arrow-down.png"
+                <img
+                  src={`${BASE_PATH}/icon/tab-caret.png`}
                   alt=""
                   width={10}
                   height={10}
                   className={clsx(
-                    "h-2.5 w-2.5 object-contain opacity-80",
+                    "h-2.5 w-2.5 object-contain",
                     isActive ? "opacity-100" : "opacity-70"
                   )}
                 />
