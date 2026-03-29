@@ -1,12 +1,12 @@
 import type { TaskItem } from "@/lib/weeks";
 import clsx from "clsx";
 import {
+  SHEET_DAY_COLUMN_MIN_WIDTH,
   SHEET_GRID_LINE_COLOR,
   SHEET_HEADER_BG,
   SHEET_HEADER_BORDER_COLOR,
-  SHEET_LETTER_BG,
   SHEET_ROW_HEIGHT,
-  SHEET_TASK_BORDER_COLOR,
+  SHEET_TIME_COLUMN_WIDTH,
 } from "@/lib/sheet-grid";
 
 type Props = {
@@ -14,119 +14,167 @@ type Props = {
   ownerShortName: string;
 };
 
-const CHECKLIST_INDEX_COLUMN_WIDTH = 84;
-const CHECKLIST_DAY_COLUMN_WIDTH = 140;
-const CHECKLIST_TIME_COLUMN_WIDTH = 170;
-const CHECKLIST_TASK_COLUMN_WIDTH = 520;
-const CHECKLIST_STATUS_COLUMN_WIDTH = 170;
-const CHECKLIST_OWNER_COLUMN_WIDTH = 150;
-
 const CHECKLIST_MIN_WIDTH =
-  CHECKLIST_INDEX_COLUMN_WIDTH +
-  CHECKLIST_DAY_COLUMN_WIDTH +
-  CHECKLIST_TIME_COLUMN_WIDTH +
-  CHECKLIST_TASK_COLUMN_WIDTH +
-  CHECKLIST_STATUS_COLUMN_WIDTH +
-  CHECKLIST_OWNER_COLUMN_WIDTH;
+  SHEET_TIME_COLUMN_WIDTH + SHEET_DAY_COLUMN_MIN_WIDTH * 7;
+
+const HEADER_ROW_HEIGHT = 46;
+
+function StatusChip({ checked }: { checked: boolean }) {
+  return (
+    <span
+      className={clsx(
+        "mx-auto inline-flex h-6 min-w-32 items-center justify-center rounded-full border px-3 text-center text-[11px] font-semibold leading-none",
+        "bg-emerald-50/80 text-emerald-700"
+      )}
+      style={{
+        borderColor: "rgba(16, 185, 129, 0.22)",
+      }}
+    >
+      {checked ? "Đã hoàn thành" : "Chưa hoàn thành"}
+    </span>
+  );
+}
+
+function getDayGroupSize(items: TaskItem[], startIndex: number) {
+  const currentDay = items[startIndex]?.day;
+  let count = 0;
+
+  for (let i = startIndex; i < items.length; i += 1) {
+    if (items[i].day !== currentDay) break;
+    count += 1;
+  }
+
+  return count;
+}
+
+function getTimeGroupSize(items: TaskItem[], startIndex: number) {
+  const currentDay = items[startIndex]?.day;
+  const currentStart = items[startIndex]?.start ?? "";
+  const currentEnd = items[startIndex]?.end ?? "";
+
+  let count = 0;
+
+  for (let i = startIndex; i < items.length; i += 1) {
+    const item = items[i];
+    const itemStart = item.start ?? "";
+    const itemEnd = item.end ?? "";
+
+    if (item.day !== currentDay) break;
+    if (itemStart !== currentStart || itemEnd !== currentEnd) break;
+
+    count += 1;
+  }
+
+  return count;
+}
+
+function isFirstDayRow(items: TaskItem[], index: number) {
+  if (index === 0) return true;
+  return items[index - 1].day !== items[index].day;
+}
+
+function isFirstTimeRow(items: TaskItem[], index: number) {
+  if (index === 0) return true;
+
+  const prev = items[index - 1];
+  const current = items[index];
+
+  return !(
+    prev.day === current.day &&
+    (prev.start ?? "") === (current.start ?? "") &&
+    (prev.end ?? "") === (current.end ?? "")
+  );
+}
 
 export function ChecklistTable({ items, ownerShortName }: Props) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white">
-      <div className="overflow-x-auto">
+      <div className="sheet-scroll-frame sheet-scroll-frame-checklist">
         <table
           className="table-fixed border-collapse text-[13px] text-slate-700"
           style={{ minWidth: CHECKLIST_MIN_WIDTH, width: "100%" }}
         >
           <colgroup>
-            <col style={{ width: CHECKLIST_INDEX_COLUMN_WIDTH }} />
-            <col style={{ width: CHECKLIST_DAY_COLUMN_WIDTH }} />
-            <col style={{ width: CHECKLIST_TIME_COLUMN_WIDTH }} />
-            <col style={{ width: CHECKLIST_TASK_COLUMN_WIDTH }} />
-            <col style={{ width: CHECKLIST_STATUS_COLUMN_WIDTH }} />
-            <col style={{ width: CHECKLIST_OWNER_COLUMN_WIDTH }} />
+            <col style={{ width: SHEET_TIME_COLUMN_WIDTH }} />
+            <col style={{ width: SHEET_DAY_COLUMN_MIN_WIDTH }} />
+            <col style={{ width: SHEET_DAY_COLUMN_MIN_WIDTH }} />
+            <col style={{ width: SHEET_DAY_COLUMN_MIN_WIDTH }} />
+            <col style={{ width: SHEET_DAY_COLUMN_MIN_WIDTH }} />
+            <col style={{ width: SHEET_DAY_COLUMN_MIN_WIDTH }} />
+            <col style={{ width: SHEET_DAY_COLUMN_MIN_WIDTH }} />
+            <col style={{ width: SHEET_DAY_COLUMN_MIN_WIDTH }} />
           </colgroup>
 
           <thead>
-            <tr
-              className="text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-              style={{ background: SHEET_LETTER_BG }}
-            >
+            <tr className="text-[13px] font-semibold text-slate-800">
               <th
-                className="px-3 py-2 text-center"
-                style={{ border: `1px solid ${SHEET_HEADER_BORDER_COLOR}` }}
-              ></th>
-              <th
-                className="px-3 py-2 text-center"
-                style={{ border: `1px solid ${SHEET_HEADER_BORDER_COLOR}` }}
-              >
-                A
-              </th>
-              <th
-                className="px-3 py-2 text-center"
-                style={{ border: `1px solid ${SHEET_HEADER_BORDER_COLOR}` }}
-              >
-                B
-              </th>
-              <th
-                className="px-3 py-2 text-center"
-                style={{ border: `1px solid ${SHEET_HEADER_BORDER_COLOR}` }}
-              >
-                C
-              </th>
-              <th
-                className="px-3 py-2 text-center"
-                style={{ border: `1px solid ${SHEET_HEADER_BORDER_COLOR}` }}
-              >
-                D
-              </th>
-              <th
-                className="px-3 py-2 text-center"
-                style={{ border: `1px solid ${SHEET_HEADER_BORDER_COLOR}` }}
-              >
-                E
-              </th>
-            </tr>
-
-            <tr
-              className="text-[13px] font-semibold text-slate-800"
-              style={{ background: SHEET_HEADER_BG }}
-            >
-              <th
-                className="px-3 py-3 text-center"
+                colSpan={2}
+                className="px-4 py-3 text-center"
                 style={{
+                  height: HEADER_ROW_HEIGHT,
                   border: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
-                  background: SHEET_LETTER_BG,
+                  background: SHEET_HEADER_BG,
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 40,
                 }}
-              >
-                #
-              </th>
-              <th
-                className="px-3 py-3 text-left"
-                style={{ border: `1px solid ${SHEET_HEADER_BORDER_COLOR}` }}
               >
                 Ngày
               </th>
+
               <th
-                className="px-3 py-3 text-left"
-                style={{ border: `1px solid ${SHEET_HEADER_BORDER_COLOR}` }}
+                className="px-4 py-3 text-center"
+                style={{
+                  height: HEADER_ROW_HEIGHT,
+                  border: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+                  background: SHEET_HEADER_BG,
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 40,
+                }}
               >
                 Khung giờ
               </th>
+
               <th
-                className="px-3 py-3 text-left"
-                style={{ border: `1px solid ${SHEET_HEADER_BORDER_COLOR}` }}
+                colSpan={3}
+                className="px-4 py-3 text-center"
+                style={{
+                  height: HEADER_ROW_HEIGHT,
+                  border: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+                  background: SHEET_HEADER_BG,
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 40,
+                }}
               >
                 Mô tả công việc
               </th>
+
               <th
-                className="px-3 py-3 text-left"
-                style={{ border: `1px solid ${SHEET_HEADER_BORDER_COLOR}` }}
+                className="px-4 py-3 text-center"
+                style={{
+                  height: HEADER_ROW_HEIGHT,
+                  border: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+                  background: SHEET_HEADER_BG,
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 40,
+                }}
               >
                 Trạng thái
               </th>
+
               <th
-                className="px-3 py-3 text-left"
-                style={{ border: `1px solid ${SHEET_HEADER_BORDER_COLOR}` }}
+                className="px-4 py-3 text-center"
+                style={{
+                  height: HEADER_ROW_HEIGHT,
+                  border: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+                  background: SHEET_HEADER_BG,
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 40,
+                }}
               >
                 Người thực hiện
               </th>
@@ -134,125 +182,129 @@ export function ChecklistTable({ items, ownerShortName }: Props) {
           </thead>
 
           <tbody>
-            {items.map((item, index) => (
-              <tr
-                key={`${item.day}-${item.title}-${index}`}
-                className="transition hover:bg-slate-50/70"
-              >
-                <td
-                  className="px-3 py-2 text-center text-[12px] font-medium text-slate-500"
-                  style={{
-                    border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
-                    background: SHEET_LETTER_BG,
-                    minHeight: SHEET_ROW_HEIGHT,
-                  }}
-                >
-                  {index + 1}
-                </td>
+            {items.map((item, index) => {
+              const renderDayCell = isFirstDayRow(items, index);
+              const renderTimeCell = isFirstTimeRow(items, index);
 
-                <td
-                  className="px-3 py-2 align-top text-slate-700"
-                  style={{
-                    border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
-                    minHeight: SHEET_ROW_HEIGHT,
-                  }}
-                >
-                  {item.day}
-                </td>
+              const dayRowSpan = renderDayCell
+                ? getDayGroupSize(items, index)
+                : undefined;
 
-                <td
-                  className="px-3 py-2 align-top text-slate-600"
-                  style={{
-                    border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
-                    minHeight: SHEET_ROW_HEIGHT,
-                  }}
-                >
-                  {item.start && item.end
-                    ? `${item.start} - ${item.end}`
-                    : "Không cố định"}
-                </td>
+              const timeRowSpan = renderTimeCell
+                ? getTimeGroupSize(items, index)
+                : undefined;
 
-                <td
-                  className="px-3 py-2 align-top text-slate-900"
-                  style={{
-                    border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
-                    minHeight: SHEET_ROW_HEIGHT,
-                  }}
+              return (
+                <tr
+                  key={`${item.day}-${item.title}-${index}`}
+                  className="transition hover:bg-slate-50/70"
+                  style={{ height: SHEET_ROW_HEIGHT }}
                 >
-                  <div className="whitespace-pre-wrap leading-6">{item.title}</div>
-                </td>
+                  {renderDayCell ? (
+                    <td
+                      colSpan={2}
+                      rowSpan={dayRowSpan}
+                      className="px-3 py-0 align-middle"
+                      style={{
+                        border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
+                      }}
+                    >
+                      <div className="truncate text-center text-[12px] font-medium leading-5 text-slate-700">
+                        {item.day.toUpperCase()}
+                      </div>
+                    </td>
+                  ) : null}
 
-                <td
-                  className="px-3 py-2 align-top"
-                  style={{
-                    border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
-                    minHeight: SHEET_ROW_HEIGHT,
-                  }}
-                >
-                  <span
-                    className={clsx(
-                      "inline-flex min-h-8 items-center rounded-md border px-3 py-1 text-[12px] font-medium",
-                      item.checked
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-amber-50 text-amber-700"
-                    )}
+                  {renderTimeCell ? (
+                    <td
+                      rowSpan={timeRowSpan}
+                      className="px-2.5 py-0 align-middle"
+                      style={{
+                        border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
+                      }}
+                    >
+                      <div className="truncate text-center leading-5 text-slate-600">
+                        {item.start && item.end
+                          ? `${item.start} - ${item.end}`
+                          : "Không cố định"}
+                      </div>
+                    </td>
+                  ) : null}
+
+                  <td
+                    colSpan={3}
+                    className="px-3 py-0 align-middle"
                     style={{
-                      borderColor: SHEET_TASK_BORDER_COLOR,
+                      border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
+                      height: SHEET_ROW_HEIGHT,
                     }}
                   >
-                    {item.checked ? "Đã hoàn thành" : "Chưa hoàn thành"}
-                  </span>
-                </td>
+                    <div className="truncate text-left leading-5 text-slate-900">
+                      - {item.title}
+                    </div>
+                  </td>
 
-                <td
-                  className="px-3 py-2 align-top text-slate-700"
-                  style={{
-                    border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
-                    minHeight: SHEET_ROW_HEIGHT,
-                  }}
-                >
-                  {ownerShortName}
-                </td>
-              </tr>
-            ))}
+                  <td
+                    className="px-2 py-0 align-middle text-center"
+                    style={{
+                      border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
+                      height: SHEET_ROW_HEIGHT,
+                    }}
+                  >
+                    <StatusChip checked={item.checked} />
+                  </td>
+
+                  <td
+                    className="px-2.5 py-0 align-middle"
+                    style={{
+                      border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
+                      height: SHEET_ROW_HEIGHT,
+                    }}
+                  >
+                    <div className="truncate text-center leading-5 text-slate-700">
+                      {ownerShortName}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
 
             {Array.from({ length: Math.max(0, 8 - items.length) }).map(
               (_, extraIndex) => (
-                <tr key={`empty-${extraIndex}`}>
+                <tr
+                  key={`empty-${extraIndex}`}
+                  style={{ height: SHEET_ROW_HEIGHT }}
+                >
                   <td
-                    className="px-3 py-2 text-center text-[12px] text-slate-400"
+                    colSpan={2}
                     style={{
                       border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
-                      background: SHEET_LETTER_BG,
                       height: SHEET_ROW_HEIGHT,
                     }}
-                  >
-                    {items.length + extraIndex + 1}
-                  </td>
+                  ></td>
+
                   <td
                     style={{
                       border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
                       height: SHEET_ROW_HEIGHT,
                     }}
                   ></td>
+
+                  <td
+                    colSpan={3}
+                    style={{
+                      border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
+                      height: SHEET_ROW_HEIGHT,
+                    }}
+                  ></td>
+
                   <td
                     style={{
                       border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
                       height: SHEET_ROW_HEIGHT,
                     }}
                   ></td>
-                  <td
-                    style={{
-                      border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
-                      height: SHEET_ROW_HEIGHT,
-                    }}
-                  ></td>
-                  <td
-                    style={{
-                      border: `1px solid ${SHEET_GRID_LINE_COLOR}`,
-                      height: SHEET_ROW_HEIGHT,
-                    }}
-                  ></td>
+
                   <td
                     style={{
                       border: `1px solid ${SHEET_GRID_LINE_COLOR}`,

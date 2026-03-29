@@ -26,11 +26,20 @@ export function WeekSheetHeader({ week }: Props) {
           Week of:
         </div>
 
-        <div className="border-t border-emerald-700 px-4 py-1.5 text-[13px] font-medium md:px-5">
-          <span>{week.weekLabel}</span>
-          <span className="ml-3 italic">
-            {week.doneCount}/{week.totalCount} completed
-          </span>
+        <div className="border-t border-emerald-700 px-4 py-1.5 text-[13px] md:px-5">
+          <div className="md:hidden">
+            <div className="font-medium leading-5">{week.weekLabel}</div>
+            <div className="mt-1 italic leading-5">
+              {week.doneCount}/{week.totalCount} completed
+            </div>
+          </div>
+
+          <div className="hidden md:block font-medium">
+            <span>{week.weekLabel}</span>
+            <span className="ml-3 italic">
+              {week.doneCount}/{week.totalCount} completed
+            </span>
+          </div>
         </div>
       </div>
     </div>

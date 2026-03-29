@@ -3,7 +3,6 @@ import {
   SHEET_GRID_TEMPLATE,
   SHEET_HEADER_BG,
   SHEET_HEADER_BORDER_COLOR,
-  SHEET_LETTER_BG,
   SHEET_MIN_WIDTH,
   SHEET_ROW_HEIGHT,
   SHEET_TASK_BORDER_COLOR,
@@ -15,42 +14,95 @@ type Props = {
   startDate: string;
 };
 
-const START_MINUTES = 8 * 60;
-const END_MINUTES = 19 * 60;
+type TimedItem = DaySection["items"][number] & {
+  startMinutes: number;
+  endMinutes: number;
+};
+
+type GroupedTimedItem = {
+  start: string;
+  end: string;
+  startMinutes: number;
+  endMinutes: number;
+  titles: string[];
+};
+
+type TimedLayoutItem = GroupedTimedItem & {
+  lane: number;
+  laneCount: number;
+  top: number;
+  height: number;
+};
+
 const SLOT_MINUTES = 30;
+const DEFAULT_START_MINUTES = 8 * 60;
+const DEFAULT_END_MINUTES = 17 * 60;
+const DAY_START_MINUTES = 0;
+const DAY_END_MINUTES = 24 * 60;
+const COMBINED_HEADER_ROW_HEIGHT = 36;
 
 function toMinutes(value: string) {
   const [hour, minute] = value.split(":").map(Number);
   return hour * 60 + minute;
 }
 
-function getGridRow(start?: string, end?: string) {
-  if (!start || !end) return null;
-
-  const startRow = Math.max(
-    1,
-    Math.floor((toMinutes(start) - START_MINUTES) / SLOT_MINUTES) + 1
-  );
-  const endRow = Math.max(
-    startRow + 1,
-    Math.ceil((toMinutes(end) - START_MINUTES) / SLOT_MINUTES) + 1
+function formatTime(totalMinutes: number) {
+  const clamped = Math.max(
+    DAY_START_MINUTES,
+    Math.min(totalMinutes, DAY_END_MINUTES)
   );
 
-  return `${startRow} / ${endRow}`;
+  const normalized = clamped % DAY_END_MINUTES;
+  const hour = String(Math.floor(normalized / 60)).padStart(2, "0");
+  const minute = String(normalized % 60).padStart(2, "0");
+
+  return `${hour}:${minute}`;
 }
 
-const slots = Array.from(
-  { length: (END_MINUTES - START_MINUTES) / SLOT_MINUTES },
-  (_, i) => {
-    const total = START_MINUTES + i * SLOT_MINUTES;
-    const hour = String(Math.floor(total / 60)).padStart(2, "0");
-    const minute = String(total % 60).padStart(2, "0");
-    return `${hour}:${minute}`;
-  }
-);
+function shouldShowHourLabel(totalMinutes: number) {
+  return totalMinutes % 60 === 0;
+}
 
-function getColumnLetter(index: number) {
-  return String.fromCharCode(65 + index);
+function floorToHour(value: number) {
+  return Math.floor(value / 60) * 60;
+}
+
+function ceilToHour(value: number) {
+  return Math.ceil(value / 60) * 60;
+}
+
+function getVisibleRange(days: DaySection[]) {
+  const timedItems = days.flatMap((day) =>
+    day.items.filter((item) => item.start && item.end)
+  );
+
+  if (timedItems.length === 0) {
+    return {
+      startMinutes: DEFAULT_START_MINUTES,
+      endMinutes: DEFAULT_END_MINUTES,
+    };
+  }
+
+  const starts = timedItems.map((item) => toMinutes(item.start!));
+  const ends = timedItems.map((item) => toMinutes(item.end!));
+
+  let startMinutes = floorToHour(Math.min(...starts));
+  let endMinutes = Math.max(
+    DEFAULT_END_MINUTES,
+    ceilToHour(Math.max(...ends))
+  );
+
+  startMinutes = Math.max(DAY_START_MINUTES, startMinutes);
+  endMinutes = Math.min(DAY_END_MINUTES, endMinutes);
+
+  if (endMinutes <= startMinutes) {
+    endMinutes = Math.min(startMinutes + 60, DAY_END_MINUTES);
+  }
+
+  return {
+    startMinutes,
+    endMinutes,
+  };
 }
 
 function getDateLabels(startDate: string, totalDays: number) {
@@ -67,18 +119,227 @@ function getDateLabels(startDate: string, totalDays: number) {
   });
 }
 
-export function ScheduleBoard({ days, startDate }: Props) {
-  const columnLetters = Array.from(
-    { length: days.length + 1 },
-    (_, index) => getColumnLetter(index)
-  );
+function firstAvailableLane(usedLanes: number[]) {
+  let lane = 0;
 
+  while (usedLanes.includes(lane)) {
+    lane += 1;
+  }
+
+  return lane;
+}
+
+function estimateWrappedLines(text: string, charsPerLine: number) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+
+  if (!normalized) return 1;
+
+  return Math.max(1, Math.ceil(normalized.length / charsPerLine));
+}
+
+function getEstimatedCharsPerLine(laneCount: number) {
+  if (laneCount >= 4) return 10;
+  if (laneCount === 3) return 14;
+  if (laneCount === 2) return 22;
+  return 32;
+}
+
+function estimateEventContentHeight(
+  titles: string[],
+  start: string,
+  end: string,
+  laneCount: number
+) {
+  const charsPerLine = getEstimatedCharsPerLine(laneCount);
+
+  const titleLines = titles.reduce((total, title) => {
+    return total + estimateWrappedLines(`- ${title}`, charsPerLine);
+  }, 0);
+
+  const titleGapHeight = Math.max(0, titles.length - 1) * 1;
+  const titleBlockHeight = titleLines * 15 + titleGapHeight;
+
+  const timeText = `${start} - ${end}`;
+  const timeLines = estimateWrappedLines(timeText, Math.max(14, charsPerLine));
+  const timeBlockHeight = timeLines * 14;
+
+  const verticalPadding = 6;
+  const gapBetweenTitleAndTime = 4;
+
+  return (
+    verticalPadding +
+    titleBlockHeight +
+    gapBetweenTitleAndTime +
+    timeBlockHeight +
+    verticalPadding
+  );
+}
+
+function buildTimedLayouts(
+  items: DaySection["items"],
+  visibleStartMinutes: number,
+  visibleEndMinutes: number
+): TimedLayoutItem[] {
+  const normalized: TimedItem[] = items
+    .filter((item) => item.start && item.end)
+    .map((item) => {
+      const rawStart = toMinutes(item.start!);
+      const rawEnd = toMinutes(item.end!);
+
+      const startMinutes = Math.max(
+        visibleStartMinutes,
+        Math.min(rawStart, visibleEndMinutes)
+      );
+
+      const endMinutes = Math.max(
+        startMinutes + SLOT_MINUTES,
+        Math.min(rawEnd, visibleEndMinutes)
+      );
+
+      return {
+        ...item,
+        startMinutes,
+        endMinutes,
+      };
+    })
+    .sort((a, b) => {
+      if (a.startMinutes !== b.startMinutes) {
+        return a.startMinutes - b.startMinutes;
+      }
+
+      if (a.endMinutes !== b.endMinutes) {
+        return a.endMinutes - b.endMinutes;
+      }
+
+      return a.title.localeCompare(b.title);
+    });
+
+  if (normalized.length === 0) {
+    return [];
+  }
+
+  const groupedMap = new Map<string, GroupedTimedItem>();
+
+  for (const item of normalized) {
+    const key = `${item.startMinutes}-${item.endMinutes}`;
+
+    if (!groupedMap.has(key)) {
+      groupedMap.set(key, {
+        start: item.start!,
+        end: item.end!,
+        startMinutes: item.startMinutes,
+        endMinutes: item.endMinutes,
+        titles: [item.title],
+      });
+    } else {
+      groupedMap.get(key)!.titles.push(item.title);
+    }
+  }
+
+  const grouped = Array.from(groupedMap.values()).sort((a, b) => {
+    if (a.startMinutes !== b.startMinutes) {
+      return a.startMinutes - b.startMinutes;
+    }
+
+    if (a.endMinutes !== b.endMinutes) {
+      return a.endMinutes - b.endMinutes;
+    }
+
+    return a.titles[0].localeCompare(b.titles[0]);
+  });
+
+  const groups: GroupedTimedItem[][] = [];
+  let currentGroup: GroupedTimedItem[] = [];
+  let currentGroupEnd = -1;
+
+  for (const item of grouped) {
+    if (currentGroup.length === 0) {
+      currentGroup = [item];
+      currentGroupEnd = item.endMinutes;
+      continue;
+    }
+
+    if (item.startMinutes < currentGroupEnd) {
+      currentGroup.push(item);
+      currentGroupEnd = Math.max(currentGroupEnd, item.endMinutes);
+      continue;
+    }
+
+    groups.push(currentGroup);
+    currentGroup = [item];
+    currentGroupEnd = item.endMinutes;
+  }
+
+  if (currentGroup.length > 0) {
+    groups.push(currentGroup);
+  }
+
+  return groups.flatMap((group) => {
+    const active: Array<{ lane: number; endMinutes: number }> = [];
+
+    const assigned = group.map((item) => {
+      for (let i = active.length - 1; i >= 0; i -= 1) {
+        if (active[i].endMinutes <= item.startMinutes) {
+          active.splice(i, 1);
+        }
+      }
+
+      const usedLanes = active.map((entry) => entry.lane);
+      const lane = firstAvailableLane(usedLanes);
+
+      active.push({
+        lane,
+        endMinutes: item.endMinutes,
+      });
+
+      return {
+        ...item,
+        lane,
+      };
+    });
+
+    const laneCount = Math.max(...assigned.map((item) => item.lane), 0) + 1;
+
+    return assigned.map((item) => {
+      const top =
+        ((item.startMinutes - visibleStartMinutes) / SLOT_MINUTES) *
+        SHEET_ROW_HEIGHT;
+
+      const height = Math.max(
+        SHEET_ROW_HEIGHT,
+        ((item.endMinutes - item.startMinutes) / SLOT_MINUTES) *
+          SHEET_ROW_HEIGHT
+      );
+
+      return {
+        ...item,
+        laneCount,
+        top,
+        height,
+      };
+    });
+  });
+}
+
+export function ScheduleBoard({ days, startDate }: Props) {
   const dateLabels = getDateLabels(startDate, days.length);
   const bodyGridStyle = createHorizontalGridBackground();
 
+  const { startMinutes: visibleStartMinutes, endMinutes: visibleEndMinutes } =
+    getVisibleRange(days);
+
+  const timelineRowCount =
+    Math.floor((visibleEndMinutes - visibleStartMinutes) / SLOT_MINUTES) + 1;
+
+  const bodyHeight = timelineRowCount * SHEET_ROW_HEIGHT;
+
+  const timelineLabels = Array.from({ length: timelineRowCount }, (_, index) =>
+    formatTime(visibleStartMinutes + index * SLOT_MINUTES)
+  );
+
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white">
-      <div className="overflow-x-auto">
+      <div className="sheet-scroll-frame sheet-scroll-frame-schedule">
         <div
           style={{
             minWidth: SHEET_MIN_WIDTH,
@@ -86,55 +347,16 @@ export function ScheduleBoard({ days, startDate }: Props) {
             gridTemplateColumns: SHEET_GRID_TEMPLATE,
           }}
         >
-          {columnLetters.map((letter, index) => (
-            <div
-              key={`letter-${letter}`}
-              className="px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-              style={{
-                background: SHEET_LETTER_BG,
-                borderBottom: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
-                borderRight:
-                  index === columnLetters.length - 1
-                    ? "none"
-                    : `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
-              }}
-            >
-              {letter}
-            </div>
-          ))}
-
           <div
-            className="px-3 py-2"
+            className="flex items-center px-6 text-left text-[13px] font-semibold text-slate-800"
             style={{
-              background: "#ffffff",
-              borderBottom: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
-              borderRight: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
-            }}
-          />
-
-          {dateLabels.map((dateLabel, index) => (
-            <div
-              key={`date-${dateLabel}-${index}`}
-              className="px-3 py-2 text-center text-[13px] font-medium text-slate-600"
-              style={{
-                background: "#ffffff",
-                borderBottom: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
-                borderRight:
-                  index === dateLabels.length - 1
-                    ? "none"
-                    : `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
-              }}
-            >
-              {dateLabel}
-            </div>
-          ))}
-
-          <div
-            className="px-3 py-3 text-left text-[13px] font-semibold text-slate-800"
-            style={{
+              height: COMBINED_HEADER_ROW_HEIGHT,
               background: SHEET_HEADER_BG,
               borderBottom: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
               borderRight: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+              position: "sticky",
+              top: 0,
+              zIndex: 40,
             }}
           >
             Deadline
@@ -143,41 +365,59 @@ export function ScheduleBoard({ days, startDate }: Props) {
           {days.map((day, index) => (
             <div
               key={`header-${day.label}-${index}`}
-              className="px-3 py-2.5 text-center text-[13px] font-semibold uppercase text-slate-800"
+              className="flex flex-col items-center justify-center gap-0 px-3 text-center"
               style={{
+                height: COMBINED_HEADER_ROW_HEIGHT,
                 background: SHEET_HEADER_BG,
                 borderBottom: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
                 borderRight:
                   index === days.length - 1
                     ? "none"
                     : `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
+                position: "sticky",
+                top: 0,
+                zIndex: 40,
               }}
             >
-              {day.label}
+              <div className="text-[12px] font-semibold uppercase leading-none tracking-[0.01em] text-slate-800">
+                {day.label}
+              </div>
+              <div className="mt-px text-[10px] font-medium leading-none text-slate-500">
+                {dateLabels[index]}
+              </div>
             </div>
           ))}
 
           <div
-            className="bg-slate-50"
+            className="grid bg-slate-50"
             style={{
-              display: "grid",
-              gridTemplateRows: `repeat(${slots.length}, ${SHEET_ROW_HEIGHT}px)`,
+              height: bodyHeight,
+              gridTemplateRows: `repeat(${timelineRowCount}, ${SHEET_ROW_HEIGHT}px)`,
               ...bodyGridStyle,
               borderRight: `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
             }}
           >
-            {slots.map((time) => (
-              <div
-                key={time}
-                className="px-2 py-1.5 text-right text-[11px] font-medium text-slate-500"
-              >
-                {time}
-              </div>
-            ))}
+            {timelineLabels.map((label, index) => {
+              const currentMinutes = visibleStartMinutes + index * SLOT_MINUTES;
+
+              return (
+                <div
+                  key={`time-cell-${index}`}
+                  className="flex items-center justify-end px-3 text-right text-[11px] font-medium text-slate-500"
+                >
+                  {shouldShowHourLabel(currentMinutes) ? label : ""}
+                </div>
+              );
+            })}
           </div>
 
           {days.map((day, dayIndex) => {
-            const timedItems = day.items.filter((item) => item.start && item.end);
+            const timedLayouts = buildTimedLayouts(
+              day.items,
+              visibleStartMinutes,
+              visibleEndMinutes
+            );
+
             const looseItems = day.items.filter(
               (item) => !item.start || !item.end
             );
@@ -188,7 +428,8 @@ export function ScheduleBoard({ days, startDate }: Props) {
                 className="relative bg-white"
                 style={{
                   display: "grid",
-                  gridTemplateRows: `repeat(${slots.length}, ${SHEET_ROW_HEIGHT}px)`,
+                  gridTemplateRows: `repeat(${timelineRowCount}, ${SHEET_ROW_HEIGHT}px)`,
+                  height: bodyHeight,
                   ...bodyGridStyle,
                   borderRight:
                     dayIndex === days.length - 1
@@ -196,29 +437,58 @@ export function ScheduleBoard({ days, startDate }: Props) {
                       : `1px solid ${SHEET_HEADER_BORDER_COLOR}`,
                 }}
               >
-                {timedItems.map((item, index) => (
-                  <div
-                    key={`${item.title}-${index}`}
-                    className="z-10 m-0.5 overflow-hidden border bg-slate-50/95 px-2 py-1 text-[12px] text-slate-800"
-                    style={{
-                      gridRow: getGridRow(item.start, item.end) ?? undefined,
-                      borderColor: SHEET_TASK_BORDER_COLOR,
-                    }}
-                  >
-                    <div className="whitespace-pre-wrap font-medium leading-4">
-                      {item.title}
+                {timedLayouts.map((item, index) => {
+                  const laneWidth = 100 / item.laneCount;
+                  const leftPercent = laneWidth * item.lane;
+
+                  const estimatedContentHeight = estimateEventContentHeight(
+                    item.titles,
+                    item.start,
+                    item.end,
+                    item.laneCount
+                  );
+
+                  const visualHeight = Math.min(
+                    Math.max(item.height, estimatedContentHeight),
+                    bodyHeight - item.top
+                  );
+
+                  return (
+                    <div
+                      key={`${item.start}-${item.end}-${item.titles.join("|")}-${index}`}
+                      className="absolute z-10 border bg-emerald-50/70 px-2 py-0.5 text-[11px] text-slate-800"
+                      style={{
+                        top: item.top,
+                        height: visualHeight,
+                        left: `calc(${leftPercent}% + 2px)`,
+                        width: `calc(${laneWidth}% - 4px)`,
+                        borderColor: "rgba(16, 185, 129, 0.22)",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <div className="space-y-px overflow-hidden">
+                        {item.titles.map((title, titleIndex) => (
+                          <div
+                            key={`${title}-${titleIndex}`}
+                            className="wrap-break-word leading-3.75 font-medium"
+                          >
+                            - {title}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-1 wrap-break-word text-[10px] leading-3.5 text-slate-500">
+                        {item.start} - {item.end}
+                      </div>
                     </div>
-                    <div className="mt-1 text-[11px] text-slate-500">
-                      {item.start} - {item.end}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {looseItems.length > 0 ? (
                   <div
                     className="z-10 m-0.5 border border-dashed bg-slate-50/95 px-2 py-2 text-[12px] text-slate-700"
                     style={{
-                      gridRow: `${slots.length - 2} / ${slots.length + 1}`,
+                      gridRow: `${Math.max(1, timelineRowCount - 2)} / ${timelineRowCount + 1}`,
                       borderColor: SHEET_TASK_BORDER_COLOR,
                     }}
                   >

@@ -41,14 +41,20 @@ function IconButton({
 
 export function WeekTopbar({ week }: Props) {
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div className="border-b border-slate-100 bg-slate-50/80">
+    <header className="sticky top-0 z-100 border-b border-slate-200 bg-white">
+      <div className="border-b border-slate-100 bg-slate-50">
         <div className="mx-auto flex max-w-360 items-center px-4 py-3 md:px-6">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 hover:text-emerald-800"
+            className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 hover:text-slate-900"
           >
-            <span className="text-base leading-none">←</span>
+            <img
+              src={`${BASE_PATH}/icon/arrow-left.png`}
+              alt=""
+              width={16}
+              height={16}
+              className="h-4 w-4 object-contain"
+            />
             <span>Quay về danh sách tuần</span>
           </Link>
         </div>
