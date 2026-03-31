@@ -11,7 +11,7 @@ import {
 
 type Props = {
   items: TaskItem[];
-  ownerShortName: string;
+  ownerGiven: string;
 };
 
 const CHECKLIST_MIN_WIDTH =
@@ -86,7 +86,7 @@ function isFirstTimeRow(items: TaskItem[], index: number) {
   );
 }
 
-export function ChecklistTable({ items, ownerShortName }: Props) {
+export function ChecklistTable({ items, ownerGiven }: Props) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white">
       <div className="sheet-scroll-frame sheet-scroll-frame-checklist">
@@ -262,7 +262,7 @@ export function ChecklistTable({ items, ownerShortName }: Props) {
                     }}
                   >
                     <div className="truncate text-center leading-5 text-slate-700">
-                      {ownerShortName}
+                      {ownerGiven}
                     </div>
                   </td>
                 </tr>

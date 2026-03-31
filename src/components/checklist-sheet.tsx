@@ -14,7 +14,7 @@ export function ChecklistSheet({ week }: Props) {
 
       <ChecklistTable
         items={week.checklist}
-        ownerShortName={week.ownerShortName}
+        ownerGiven={week.ownerGiven}
       />
 
       <WeekFeedbackSolution

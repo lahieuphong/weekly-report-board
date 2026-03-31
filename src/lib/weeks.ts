@@ -37,7 +37,7 @@ export type WeekReport = {
   title: string;
   owner: string;
   teamName: string;
-  ownerShortName: string;
+  ownerGiven: string;
   documentTitle: string;
   weekLabel: string;
   startDate: string;
@@ -56,11 +56,9 @@ export type WeekReport = {
 
 type Frontmatter = {
   slug?: unknown;
-  title?: unknown;
-  owner?: unknown;
+  ownerPrefix?: unknown;
+  ownerGiven?: unknown;
   teamName?: unknown;
-  ownerShortName?: unknown;
-  weekLabel?: unknown;
   startDate?: unknown;
   endDate?: unknown;
   reportYear?: unknown;
@@ -74,6 +72,46 @@ function normalizeDate(value: unknown): string {
   }
 
   return String(value ?? "").trim();
+}
+
+function toDisplayDate(value: string): string {
+  if (!value) return "";
+
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const [, year, month, day] = match;
+    return `${day}/${month}/${year}`;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function buildWeekLabel(startDate: string, endDate: string): string {
+  const start = toDisplayDate(startDate);
+  const end = toDisplayDate(endDate);
+
+  if (start && end) return `${start} - ${end}`;
+  return start || end;
+}
+
+function buildWeekTitle(params: {
+  reportWeekOfMonth: number;
+  reportMonth: number;
+  reportYear: number;
+}): string {
+  const { reportWeekOfMonth, reportMonth, reportYear } = params;
+
+  const week = reportWeekOfMonth > 0 ? reportWeekOfMonth : "";
+  const month = reportMonth > 0 ? reportMonth : "";
+  const year = reportYear > 0 ? reportYear : "";
+
+  return `Tuần ${week} tháng ${month} năm ${year}`.replace(/\s+/g, " ").trim();
 }
 
 function toText(value: unknown): string {
@@ -104,29 +142,29 @@ function inferSlugFromPath(filePath: string): string {
   return path.basename(filePath, ".md");
 }
 
-function inferOwnerShortName(owner: string, value: unknown): string {
-  const shortName = toText(value);
+function inferOwnerGiven(ownerPrefix: string, value: unknown): string {
+  const givenName = toText(value);
 
-  if (shortName) {
-    return shortName;
+  if (givenName) {
+    return givenName;
   }
 
-  const parts = owner.split(/\s+/).filter(Boolean);
-  return parts[parts.length - 1] ?? owner;
+  const parts = ownerPrefix.split(/\s+/).filter(Boolean);
+  return parts[parts.length - 1] ?? ownerPrefix;
 }
 
 function buildDocumentTitle(params: {
   title: string;
   teamName: string;
-  ownerShortName: string;
+  ownerGiven: string;
 }): string {
-  const { title, teamName, ownerShortName } = params;
+  const { title, teamName, ownerGiven } = params;
 
   const normalizedTitle = title.startsWith("Báo cáo ")
     ? title
     : `Báo cáo ${title}`;
 
-  return [normalizedTitle, teamName, ownerShortName]
+  return [normalizedTitle, teamName, ownerGiven]
     .filter(Boolean)
     .join(" - ");
 }
@@ -291,24 +329,31 @@ async function readWeekFile(fullPath: string): Promise<WeekReport> {
   const sections = splitSections(content);
 
   const slug = toText(meta.slug) || inferSlugFromPath(fullPath);
-  const title = toText(meta.title);
-  const owner = toText(meta.owner);
+  const ownerPrefix = toText(meta.ownerPrefix);
   const teamName = toText(meta.teamName);
-  const ownerShortName = inferOwnerShortName(owner, meta.ownerShortName);
-  const documentTitle = buildDocumentTitle({
-    title,
-    teamName,
-    ownerShortName,
-  });
+  const ownerGiven = inferOwnerGiven(ownerPrefix, meta.ownerGiven);
+  const owner = [ownerPrefix, ownerGiven].filter(Boolean).join(" ").trim();
 
   const startDate = normalizeDate(meta.startDate);
   const endDate = normalizeDate(meta.endDate);
+  const weekLabel = buildWeekLabel(startDate, endDate);
 
   const { reportYear, reportMonth, reportWeekOfMonth } = inferCalendarMeta({
     filePath: fullPath,
     slug,
     startDate,
     meta,
+  });
+  const title =
+    buildWeekTitle({
+      reportWeekOfMonth,
+      reportMonth,
+      reportYear,
+    });
+  const documentTitle = buildDocumentTitle({
+    title,
+    teamName,
+    ownerGiven,
   });
 
   const days: DaySection[] = DAY_LABELS.map((label) =>
@@ -326,9 +371,9 @@ async function readWeekFile(fullPath: string): Promise<WeekReport> {
     title,
     owner,
     teamName,
-    ownerShortName,
+    ownerGiven,
     documentTitle,
-    weekLabel: toText(meta.weekLabel),
+    weekLabel,
     startDate,
     endDate,
     reportYear,

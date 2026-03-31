@@ -175,6 +175,51 @@ function estimateEventContentHeight(
   );
 }
 
+function getEventTypographyDensity(
+  estimatedContentHeight: number,
+  visualHeight: number
+) {
+  const densityRatio =
+    visualHeight > 0 ? estimatedContentHeight / visualHeight : 1;
+
+  if (densityRatio >= 1.7) {
+    return {
+      titleFontSize: 9,
+      titleLineHeight: 1.18,
+      timeFontSize: 8,
+      timeLineHeight: 1.12,
+      paddingX: 6,
+      paddingY: 3,
+      titleTimeGap: 2,
+      compact: true,
+    };
+  }
+
+  if (densityRatio >= 1.3) {
+    return {
+      titleFontSize: 10,
+      titleLineHeight: 1.22,
+      timeFontSize: 9,
+      timeLineHeight: 1.16,
+      paddingX: 7,
+      paddingY: 4,
+      titleTimeGap: 3,
+      compact: true,
+    };
+  }
+
+  return {
+    titleFontSize: 11,
+    titleLineHeight: 1.28,
+    timeFontSize: 10,
+    timeLineHeight: 1.2,
+    paddingX: 8,
+    paddingY: 4,
+    titleTimeGap: 4,
+    compact: false,
+  };
+}
+
 function buildTimedLayouts(
   items: DaySection["items"],
   visibleStartMinutes: number,
@@ -448,36 +493,71 @@ export function ScheduleBoard({ days, startDate }: Props) {
                     item.laneCount
                   );
 
-                  const visualHeight = Math.min(
-                    Math.max(item.height, estimatedContentHeight),
-                    bodyHeight - item.top
+                  const desiredHeight = Math.max(
+                    item.height,
+                    estimatedContentHeight
+                  );
+                  const visualHeight = Math.min(desiredHeight, bodyHeight);
+                  const maxTop = Math.max(0, bodyHeight - visualHeight);
+                  const visualTop = Math.min(item.top, maxTop);
+
+                  const typography = getEventTypographyDensity(
+                    estimatedContentHeight,
+                    visualHeight
                   );
 
                   return (
                     <div
                       key={`${item.start}-${item.end}-${item.titles.join("|")}-${index}`}
-                      className="absolute z-10 border bg-emerald-50/70 px-2 py-0.5 text-[11px] text-slate-800"
+                      className="absolute z-10 border bg-emerald-50/70 text-slate-800"
                       style={{
-                        top: item.top,
+                        top: visualTop,
                         height: visualHeight,
                         left: `calc(${leftPercent}% + 2px)`,
                         width: `calc(${laneWidth}% - 4px)`,
                         borderColor: "rgba(16, 185, 129, 0.22)",
                         boxSizing: "border-box",
+                        padding: `${typography.paddingY}px ${typography.paddingX}px`,
+                        overflow: "hidden",
+                        display: "flex",
+                        flexDirection: "column",
                       }}
                     >
-                      <div className="space-y-px overflow-hidden">
+                      <div
+                        className="schedule-event-scroll min-h-0 flex-1 space-y-px"
+                        style={{
+                          overflowY: "auto",
+                          overscrollBehavior: "contain",
+                        }}
+                      >
                         {item.titles.map((title, titleIndex) => (
                           <div
                             key={`${title}-${titleIndex}`}
-                            className="wrap-break-word leading-3.75 font-medium"
+                            className="font-medium"
+                            style={{
+                              fontSize: typography.titleFontSize,
+                              lineHeight: typography.titleLineHeight,
+                              overflowWrap: "anywhere",
+                              wordBreak: "break-word",
+                            }}
                           >
                             - {title}
                           </div>
                         ))}
                       </div>
 
-                      <div className="mt-1 wrap-break-word text-[10px] leading-3.5 text-slate-500">
+                      <div
+                        className="text-slate-500"
+                        style={{
+                          marginTop: typography.titleTimeGap,
+                          fontSize: typography.timeFontSize,
+                          lineHeight: typography.timeLineHeight,
+                          overflowWrap: "anywhere",
+                          wordBreak: "break-word",
+                          textAlign: "right",
+                          width: "100%",
+                        }}
+                      >
                         {item.start} - {item.end}
                       </div>
                     </div>

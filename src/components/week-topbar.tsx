@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { WeekReport } from "@/lib/weeks";
 
 type Props = {
@@ -6,17 +7,24 @@ type Props = {
 };
 
 const BASE_PATH =
-  process.env.NODE_ENV === "production" ? "/weekly-report-board" : "";
+  process.env.NEXT_PUBLIC_BASE_PATH ??
+  (process.env.NODE_ENV === "production" ? "/weekly-report-board" : "");
+
+function withBasePath(assetPath: string): string {
+  return `${BASE_PATH}${assetPath.startsWith("/") ? assetPath : `/${assetPath}`}`;
+}
 
 function AppIcon() {
   return (
-    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 shadow-sm">
-      <div className="grid grid-cols-2 gap-0.5">
-        <span className="block h-1.5 w-1.5 rounded-[1px] bg-white" />
-        <span className="block h-1.5 w-1.5 rounded-[1px] bg-white" />
-        <span className="block h-1.5 w-1.5 rounded-[1px] bg-white" />
-        <span className="block h-1.5 w-1.5 rounded-[1px] bg-white" />
-      </div>
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl shadow-sm">
+      <Image
+        src={withBasePath("/logo/logo.png")}
+        alt="Logo"
+        width={44}
+        height={44}
+        className="h-11 w-11 object-cover"
+        priority
+      />
     </div>
   );
 }
@@ -49,7 +57,7 @@ export function WeekTopbar({ week }: Props) {
             className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 hover:text-slate-900"
           >
             <img
-              src={`${BASE_PATH}/icon/arrow-left.png`}
+              src={withBasePath("/icon/arrow-left.png")}
               alt=""
               width={16}
               height={16}
@@ -145,7 +153,7 @@ export function WeekTopbar({ week }: Props) {
 
           <div className="overflow-hidden rounded-full ring-2 ring-white shadow-sm">
             <img
-              src={`${BASE_PATH}/avatar/lahieuphong.png`}
+              src={withBasePath("/avatar/lahieuphong.png")}
               alt={week.owner}
               width={40}
               height={40}
